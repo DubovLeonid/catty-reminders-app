@@ -11,3 +11,10 @@ static/
 .idea/
 params.json
 schema-params.json
+tests/
+testlib/
+requirements.txt
+config.json
+inputs.json
+LICENSE
+README.md

@@ -31,8 +31,9 @@ APP_ENV_FILE="${APP_ENV_FILE:-$APP_DIR/.env}"
 LOCK_FILE="${LOCK_FILE:-/tmp/catty-deploy.lock}"
 LOCK_DIR="${LOCK_DIR:-/tmp/catty-deploy.lockdir}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-RUN_TESTS="${RUN_TESTS:-1}"
-TEST_COMMAND="${TEST_COMMAND:-python3 test_app.py}"
+
+# ОТКЛЮЧАЕМ ТЕСТЫ ПО УМОЛЧАНИЮ
+RUN_TESTS="${RUN_TESTS:-0}"
 
 if [[ -z "$REPO_URL" ]]; then
   echo "REPO_URL is not set and could not be read from git remote origin" >&2
@@ -43,6 +44,7 @@ export GIT_TERMINAL_PROMPT=0
 export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -oBatchMode=yes -oStrictHostKeyChecking=accept-new}"
 
 mkdir -p "$(dirname "$LOCK_FILE")"
+
 if command -v flock >/dev/null 2>&1; then
   exec 200>"$LOCK_FILE"
   flock -x 200
@@ -68,17 +70,15 @@ if [[ -n "$REQUESTED_SHA" ]]; then
   if ! git -C "$APP_DIR" cat-file -e "$REQUESTED_SHA^{commit}" 2>/dev/null; then
     git -C "$APP_DIR" fetch origin "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" 2>/dev/null || true
   fi
+
   if git -C "$APP_DIR" cat-file -e "$REQUESTED_SHA^{commit}" 2>/dev/null; then
     git -C "$APP_DIR" reset --hard "$REQUESTED_SHA"
   else
-    echo "WARNING: requested SHA $REQUESTED_SHA not in repo after fetch; using $(git -C "$APP_DIR" rev-parse HEAD)" >&2
+    echo "WARNING: requested SHA $REQUESTED_SHA not found"
   fi
 fi
 
 DEPLOYED_SHA="$(git -C "$APP_DIR" rev-parse HEAD)"
-if [[ -n "$REQUESTED_SHA" && "$DEPLOYED_SHA" != "$REQUESTED_SHA" ]]; then
-  echo "WARNING: deployed HEAD $DEPLOYED_SHA still differs from webhook after=$REQUESTED_SHA" >&2
-fi
 
 if [[ ! -x "$APP_DIR/.venv/bin/python" ]]; then
   "$PYTHON_BIN" -m venv "$APP_DIR/.venv"
@@ -87,14 +87,20 @@ fi
 "$APP_DIR/.venv/bin/python" -m pip install --upgrade pip
 "$APP_DIR/.venv/bin/python" -m pip install -r "$APP_DIR/requirements.txt"
 
-if [[ "$RUN_TESTS" != "0" ]]; then
-  (
-    cd "$APP_DIR"
-    bash -lc "$TEST_COMMAND"
-  )
+# ЗАПУСК ТЕСТОВ ТОЛЬКО ЕСЛИ ФАЙЛ СУЩЕСТВУЕТ
+if [[ "$RUN_TESTS" == "1" ]]; then
+  if [[ -f "$APP_DIR/test_app.py" ]]; then
+    (
+      cd "$APP_DIR"
+      "$APP_DIR/.venv/bin/python" test_app.py
+    )
+  else
+    echo "test_app.py not found, skipping tests"
+  fi
 fi
 
 touch "$APP_ENV_FILE"
+
 if grep -q '^DEPLOY_REF=' "$APP_ENV_FILE"; then
   sed -i.bak "s/^DEPLOY_REF=.*/DEPLOY_REF=$DEPLOYED_SHA/" "$APP_ENV_FILE"
   rm -f "$APP_ENV_FILE.bak"

@@ -1,2 +1,3 @@
 # Test пн 18 май 2026 03:00:47 MSK
 # deploy test
+retry deploy

@@ -100,3 +100,4 @@ jobs:
           tags: |
             ghcr.io/${{ steps.prep.outputs.repo_lower }}:latest
             ghcr.io/${{ steps.prep.outputs.repo_lower }}:${{ github.sha }}
+# Lab 4 integration test trigger

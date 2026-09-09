@@ -3,14 +3,33 @@ name: CI
 on:
   push:
     branches:
-      - lab3*
+      - lab4*
   pull_request:
     branches:
-      - lab3*
+      - lab4*
 
 jobs:
-  tests:
+  docker-lint:
     runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Hadolint
+        run: docker run --rm -i hadolint/hadolint hadolint - < Dockerfile
+
+  tests:
+    needs: docker-lint
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: mariadb:11.8.6-ubi9
+        env:
+          MARIADB_ROOT_PASSWORD: mypass
+          MARIADB_DATABASE: catty_reminders
+        ports:
+          - 3306:3306
 
     steps:
       - uses: actions/checkout@v4
@@ -27,24 +46,27 @@ jobs:
           pip install uvicorn pytest-playwright
           playwright install --with-deps chromium
 
+      - name: Patch config for CI
+        run: sed -i 's/"host": "db"/"host": "127.0.0.1"/g' config.json
+
       - name: Start app
         run: |
           nohup uvicorn app.main:app --host 127.0.0.1 --port 8181 &
-          sleep 5
+          sleep 10
 
       - name: Run tests
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: pytest --junitxml=test_result.xml
 
-      - name: Upload test results
+      - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test_result
           path: test_result.xml
 
-  build-and-push:
+  docker-build:
     needs: tests
     runs-on: ubuntu-latest
 
@@ -69,7 +91,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .

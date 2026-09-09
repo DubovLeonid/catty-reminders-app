@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - lab3*
+      - 'lab3*'
   pull_request:
     branches:
-      - lab3*
+      - 'lab3*'
 
 jobs:
   tests:
@@ -74,6 +74,8 @@ jobs:
         with:
           context: .
           push: true
+          build-args: |
+            DEPLOY_REF=${{ github.sha }}
           tags: |
             ghcr.io/${{ steps.prep.outputs.repo_lower }}:latest
             ghcr.io/${{ steps.prep.outputs.repo_lower }}:${{ github.sha }}
